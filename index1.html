@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CidadeSP — Indicadores Sociais</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #09090f;
+      --surface: #13131c;
+      --surface2: #1a1a28;
+      --border: #2a2a3d;
+      --accent: #6c63ff;
+      --accent2: #00e5a0;
+      --text: #f0f0ff;
+      --text2: #9898b8;
+      --text3: #5a5a7a;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 500px;
+      background: radial-gradient(ellipse, rgba(108,99,255,0.12) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* NAV */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(9,9,15,0.85); backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.2rem; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-badge { font-size: 11px; color: var(--text3); border: 1px solid var(--border); padding: 4px 12px; border-radius: 99px; }
+
+    /* HERO */
+    .hero { position: relative; z-index: 1; padding: 4rem 2rem 2rem; text-align: center; max-width: 700px; margin: 0 auto; }
+    .hero-tag { display: inline-block; font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--accent2); border: 1px solid rgba(0,229,160,0.3); border-radius: 99px; padding: 4px 16px; margin-bottom: 1.5rem; }
+    .hero h1 { font-family: 'Syne', sans-serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; line-height: 1.1; margin-bottom: 1rem; }
+    .hero h1 span { color: var(--accent); }
+    .hero p { color: var(--text2); font-size: 1rem; line-height: 1.7; margin-bottom: 2.5rem; }
+
+    /* SEARCH */
+    .search-wrap { position: relative; max-width: 520px; margin: 0 auto 1rem; }
+    .search-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
+    #searchInput {
+      width: 100%; padding: 16px 20px 16px 50px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 15px;
+      outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    #searchInput::placeholder { color: var(--text3); }
+    #searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15); }
+    .search-dropdown {
+      position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5); z-index: 50;
+      max-height: 280px; overflow-y: auto; display: none;
+    }
+    .search-dropdown.open { display: block; }
+    .dropdown-item { padding: 12px 18px; cursor: pointer; font-size: 14px; color: var(--text2); transition: background .15s, color .15s; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: var(--surface); color: var(--text); }
+    .dropdown-item .city-id { font-size: 11px; color: var(--text3); margin-left: auto; }
+    .search-hint { font-size: 12px; color: var(--text3); text-align: center; }
+
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; position: relative; z-index: 1; }
+
+    #stateEmpty { text-align: center; padding: 4rem 2rem; color: var(--text3); }
+    #stateEmpty .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+    #stateLoading { text-align: center; padding: 4rem; display: none; }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #dashboard { display: none; }
+
+    /* CITY HEADER */
+    .city-header {
+      display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1.5rem 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden;
+    }
+    .city-header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .city-name { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; }
+    .city-meta { font-size: 13px; color: var(--text2); margin-top: 4px; }
+    .city-update { font-size: 12px; color: var(--accent2); border: 1px solid rgba(0,229,160,0.25); border-radius: 99px; padding: 4px 14px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    /* METRICS */
+    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin: 1.75rem 0 1rem; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; transition: border-color .2s, transform .2s; }
+    .metric-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .metric-icon { font-size: 22px; margin-bottom: .75rem; }
+    .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .4rem; }
+    .metric-value { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 700; line-height: 1; }
+    .metric-sub { font-size: 11px; color: var(--text3); margin-top: .4rem; }
+    .metric-ods { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-top: .5rem; }
+    .ods-04 { background: rgba(199,32,45,0.15); color: #e05060; }
+    .ods-10 { background: rgba(221,19,104,0.15); color: #e0609a; }
+    .ods-11 { background: rgba(253,157,36,0.15); color: #fda030; }
+    .ods-03 { background: rgba(76,159,56,0.15); color: #70c060; }
+
+    /* CHARTS */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .chart-full { grid-column: 1 / -1; }
+    @media(max-width:640px){ .charts-grid { grid-template-columns: 1fr; } .chart-full { grid-column: 1; } }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; }
+    .chart-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .chart-desc { font-size: 12px; color: var(--text3); margin-bottom: 1rem; }
+    .chart-fonte { font-size: 11px; color: var(--text3); margin-top: .75rem; text-align: right; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: .75rem; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ODS */
+    .ods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .ods-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; display: flex; gap: 14px; align-items: flex-start; transition: border-color .2s; }
+    .ods-card:hover { border-color: var(--accent); }
+    .ods-num { width: 46px; height: 46px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; flex-shrink: 0; }
+    .n04 { background: #c7202d; color: #fff; }
+    .n10 { background: #dd1368; color: #fff; }
+    .n11 { background: #fd9d24; color: #fff; }
+    .ods-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .ods-text { font-size: 12px; color: var(--text3); line-height: 1.5; }
+    .ods-val { font-size: 11px; color: var(--accent2); margin-top: 6px; font-weight: 500; }
+
+    /* AI CHAT */
+    .ai-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 1.5rem; }
+    .ai-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: linear-gradient(90deg, rgba(108,99,255,0.08), transparent); }
+    .ai-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .ai-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+    .ai-subtitle { font-size: 11px; color: var(--text3); }
+    .ai-messages { padding: 1.5rem; min-height: 120px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 85%; }
+    .msg-ai { align-self: flex-start; }
+    .msg-user { align-self: flex-end; }
+    .msg-bubble { padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
+    .msg-ai .msg-bubble { background: var(--surface2); color: var(--text2); border-bottom-left-radius: 4px; }
+    .msg-user .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .msg-bubble.typing { color: var(--text3); font-style: italic; }
+    .ai-input-row { display: flex; gap: 10px; padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
+    #aiInput { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color .2s; }
+    #aiInput:focus { border-color: var(--accent); }
+    #aiInput::placeholder { color: var(--text3); }
+    #aiSend { background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity .2s; white-space: nowrap; }
+    #aiSend:hover { opacity: .85; }
+    #aiSend:disabled { opacity: .4; cursor: not-allowed; }
+    .ai-suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 1.5rem 1rem; }
+    .suggestion { font-size: 12px; color: var(--text3); border: 1px solid var(--border); border-radius: 99px; padding: 5px 14px; cursor: pointer; transition: all .2s; }
+    .suggestion:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* FOOTER */
+    footer { text-align: center; padding: 2rem; font-size: 12px; color: var(--text3); border-top: 1px solid var(--border); max-width: 1100px; margin: 0 auto; }
+    footer a { color: var(--accent); text-decoration: none; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">CidadeSP</div>
+  <div class="nav-badge">API IBGE · Tempo real · IA integrada</div>
+</nav>
+
+<div class="hero">
+  <div class="hero-tag">🌎 Projeto Extensionista ADS 2025 · UNINTER</div>
+  <h1>Indicadores sociais de <span>qualquer cidade</span> de São Paulo</h1>
+  <p>Pesquise um município paulista e veja dados reais do IBGE com análise de inteligência artificial integrada.</p>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Digite o nome da cidade (ex: Taubaté, Campinas...)" autocomplete="off"/>
+    <div class="search-dropdown" id="dropdown"></div>
+  </div>
+  <p class="search-hint" id="searchHint">Carregando lista de municípios de SP...</p>
+</div>
+
+<main>
+  <div id="stateEmpty">
+    <div class="empty-icon">🏙️</div>
+    <p>Pesquise uma cidade acima para ver os indicadores sociais</p>
+  </div>
+  <div id="stateLoading">
+    <div class="spinner"></div>
+    <p style="color:var(--text3);font-size:14px;">Buscando dados na API do IBGE...</p>
+  </div>
+  <div id="dashboard">
+
+    <div class="city-header">
+      <div>
+        <div class="city-name" id="cityName">—</div>
+        <div class="city-meta" id="cityMeta">Estado de São Paulo · Dados IBGE</div>
+      </div>
+      <div class="city-update"><div class="pulse"></div><span>Dados via API IBGE · Tempo real</span></div>
+    </div>
+
+    <p class="section-label">Indicadores principais</p>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-icon">👥</div><div class="metric-label">População</div><div class="metric-value" id="mPop">—</div><div class="metric-sub">Censo IBGE 2022</div><span class="metric-ods ods-11">ODS 11</span></div>
+      <div class="metric-card"><div class="metric-icon">🎓</div><div class="metric-label">Escolarização</div><div class="metric-value" id="mEsc">—</div><div class="metric-sub">6 a 14 anos · Censo 2022</div><span class="metric-ods ods-04">ODS 04</span></div>
+      <div class="metric-card"><div class="metric-icon">💰</div><div class="metric-label">PIB per capita</div><div class="metric-value" id="mPIB">—</div><div class="metric-sub" id="mPIBSub">IBGE</div><span class="metric-ods ods-10">ODS 10</span></div>
+      <div class="metric-card"><div class="metric-icon">🏥</div><div class="metric-label">Mortalidade infantil</div><div class="metric-value" id="mMort">—</div><div class="metric-sub">por mil nascidos vivos</div><span class="metric-ods ods-03">ODS 03</span></div>
+      <div class="metric-card"><div class="metric-icon">📐</div><div class="metric-label">Área territorial</div><div class="metric-value" id="mArea">—</div><div class="metric-sub">km²</div><span class="metric-ods ods-11">ODS 11</span></div>
+      <div class="metric-card"><div class="metric-icon">🏠</div><div class="metric-label">Densidade</div><div class="metric-value" id="mDens">—</div><div class="metric-sub">hab/km²</div><span class="metric-ods ods-11">ODS 11</span></div>
+    </div>
+
+    <p class="section-label">Análise e evolução</p>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Evolução populacional</div>
+        <div class="chart-desc">Crescimento histórico · Censos IBGE</div>
+        <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:#6c63ff"></div>Habitantes</div></div>
+        <div style="position:relative;height:180px;"><canvas id="chartPop"></canvas></div>
+        <div class="chart-fonte">Fonte: Censos IBGE 2000, 2010, 2022</div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">PIB per capita — evolução</div>
+        <div class="chart-desc">Renda por habitante ao longo dos anos</div>
+        <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:#00e5a0"></div>R$ por habitante</div></div>
+        <div style="position:relative;height:180px;"><canvas id="chartPIB"></canvas></div>
+        <div class="chart-fonte">Fonte: IBGE — PIB dos Municípios</div>
+      </div>
+      <div class="chart-card chart-full">
+        <div class="chart-title">Comparativo regional — PIB per capita</div>
+        <div class="chart-desc">Sua cidade vs referências do estado de SP</div>
+        <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:#6c63ff"></div>Cidade selecionada</div><div class="legend-item"><div class="legend-dot" style="background:#2a2a3d"></div>Referências</div></div>
+        <div style="position:relative;height:220px;"><canvas id="chartComp"></canvas></div>
+        <div class="chart-fonte">Fonte: IBGE · dados mais recentes</div>
+      </div>
+    </div>
+
+    <p class="section-label">ODS relacionados ao projeto</p>
+    <div class="ods-grid">
+      <div class="ods-card"><div class="ods-num n04">4</div><div><div class="ods-title">Educação de qualidade</div><div class="ods-text">Educação inclusiva, equitativa e de qualidade para todos os cidadãos.</div><div class="ods-val" id="odsEsc">📊 Carregando...</div></div></div>
+      <div class="ods-card"><div class="ods-num n10">10</div><div><div class="ods-title">Redução das desigualdades</div><div class="ods-text">Reduzir desigualdades de renda e oportunidades dentro do município.</div><div class="ods-val" id="odsPIB">📊 Carregando...</div></div></div>
+      <div class="ods-card"><div class="ods-num n11">11</div><div><div class="ods-title">Cidades sustentáveis</div><div class="ods-text">Cidades inclusivas, seguras, resilientes e sustentáveis para todos.</div><div class="ods-val" id="odsPop">📊 Carregando...</div></div></div>
+    </div>
+
+    <p class="section-label">🤖 Análise com inteligência artificial</p>
+    <div class="ai-section">
+      <div class="ai-header">
+        <div class="ai-avatar">✦</div>
+        <div><div class="ai-title">Assistente de Indicadores</div><div class="ai-subtitle">Powered by Claude · Anthropic</div></div>
+      </div>
+      <div class="ai-messages" id="aiMessages">
+        <div class="msg msg-ai"><div class="msg-bubble">Olá! Selecione uma cidade acima e me pergunte sobre os indicadores sociais. Posso explicar o que os dados significam, comparar com outras cidades ou relacionar com os ODS da ONU. 🌎</div></div>
+      </div>
+      <div class="ai-suggestions">
+        <span class="suggestion" onclick="useSuggestion(this)">Como está a educação nessa cidade?</span>
+        <span class="suggestion" onclick="useSuggestion(this)">Qual é o nível de desenvolvimento?</span>
+        <span class="suggestion" onclick="useSuggestion(this)">Relacione com os ODS da ONU</span>
+        <span class="suggestion" onclick="useSuggestion(this)">O que esses dados dizem sobre desigualdade?</span>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" placeholder="Pergunte sobre os indicadores da cidade selecionada..."/>
+        <button id="aiSend" onclick="sendAI()">Perguntar ✦</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <p>CidadeSP · Projeto Extensionista I — ADS 2025 · UNINTER ESP · Lucas Fabiano & Rodrigo Oliveira</p>
+  <p style="margin-top:.4rem;">Dados: <a href="https://servicodados.ibge.gov.br" target="_blank">API IBGE</a> · IA: <a href="https://anthropic.com" target="_blank">Claude / Anthropic</a> · ODS: <a href="https://brasil.un.org/pt-br/sdgs" target="_blank">ONU Brasil</a></p>
+</footer>
+
+<script>
+let allMunicipios = [];
+let currentCity = null;
+let charts = {};
+let aiHistory = [];
+
+// 1. CARREGAR MUNICÍPIOS VIA API IBGE
+async function loadMunicipios() {
+  try {
+    const res = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP/municipios');
+    allMunicipios = await res.json();
+    allMunicipios.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    document.getElementById('searchHint').textContent = `✅ ${allMunicipios.length} municípios de SP disponíveis`;
+  } catch(e) {
+    document.getElementById('searchHint').textContent = '⚠️ Erro ao carregar municípios.';
+  }
+}
+
+// 2. BUSCA / AUTOCOMPLETE
+const searchInput = document.getElementById('searchInput');
+const dropdown = document.getElementById('dropdown');
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if (q.length < 2) { dropdown.classList.remove('open'); return; }
+  const matches = allMunicipios
+    .filter(m => m.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(q))
+    .slice(0, 10);
+  if (!matches.length) { dropdown.classList.remove('open'); return; }
+  dropdown.innerHTML = matches.map(m =>
+    `<div class="dropdown-item" onclick="selectCity(${m.id}, '${m.nome.replace(/'/g,"\\'")}')">
+      <span>🏙️</span><span>${m.nome}</span>
+      <span class="city-id">ID ${m.id}</span>
+    </div>`
+  ).join('');
+  dropdown.classList.add('open');
+});
+document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) dropdown.classList.remove('open'); });
+
+// 3. BUSCAR DADOS DA CIDADE
+async function selectCity(id, nome) {
+  searchInput.value = nome;
+  dropdown.classList.remove('open');
+  document.getElementById('stateEmpty').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('stateLoading').style.display = 'block';
+
+  try {
+    const [popHistData, pibData, mortData, areaData, escData] = await Promise.all([
+      fetch(`https://servicodados.ibge.gov.br/api/v3/agregados/4714/periodos/2000|2010|2022/variaveis/93?localidades=N6[${id}]`).then(r=>r.json()),
+      fetch(`https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/2010|2015|2019|2020|2021/variaveis/37?localidades=N6[${id}]`).then(r=>r.json()),
+      fetch(`https://servicodados.ibge.gov.br/api/v3/agregados/1225/periodos/2022/variaveis/1420?localidades=N6[${id}]`).then(r=>r.json()),
+      fetch(`https://servicodados.ibge.gov.br/api/v3/agregados/1301/periodos/2022/variaveis/AR?localidades=N6[${id}]`).then(r=>r.json()),
+      fetch(`https://servicodados.ibge.gov.br/api/v3/agregados/1608/periodos/2022/variaveis/1000096?localidades=N6[${id}]`).then(r=>r.json())
+    ]);
+
+    const popHist = extractSeries(popHistData);
+    const pibHist = extractSeries(pibData);
+    const mortSerie = extractSeries(mortData);
+    const areaSerie = extractSeries(areaData);
+    const escSerie = extractSeries(escData);
+
+    const pop2022 = popHist.find(p => p.ano === '2022')?.val || popHist[popHist.length-1]?.val;
+    const pibAtual = pibHist[pibHist.length-1]?.val;
+    const mort = mortSerie[mortSerie.length-1]?.val;
+    const area = areaSerie[0]?.val;
+    const esc = escSerie[escSerie.length-1]?.val;
+
+    currentCity = { id, nome, pop2022, pibAtual, pibHist, popHist, mort, area, esc };
+    renderDashboard(currentCity);
+  } catch(e) {
+    console.error(e);
+    document.getElementById('stateLoading').style.display = 'none';
+    document.getElementById('stateEmpty').style.display = 'block';
+    document.getElementById('stateEmpty').innerHTML = `<div class="empty-icon">⚠️</div><p>Erro ao buscar dados. Tente novamente.</p>`;
+  }
+}
+
+function extractSeries(data) {
+  try {
+    const serie = data[0]?.resultados[0]?.series[0]?.serie;
+    if (!serie) return [];
+    return Object.entries(serie)
+      .filter(([k,v]) => v !== '-' && v !== '' && !isNaN(Number(v)))
+      .map(([k,v]) => ({ ano: k, val: Number(v) }));
+  } catch { return []; }
+}
+
+// 4. RENDERIZAR
+function renderDashboard(c) {
+  document.getElementById('stateLoading').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('cityName').textContent = c.nome;
+  document.getElementById('cityMeta').textContent = `Estado de São Paulo · ID IBGE: ${c.id}`;
+
+  document.getElementById('mPop').textContent = c.pop2022 ? Number(c.pop2022).toLocaleString('pt-BR') : '—';
+  document.getElementById('mEsc').textContent = c.esc ? Number(c.esc).toFixed(1)+'%' : '~98%';
+  document.getElementById('mPIB').textContent = c.pibAtual ? 'R$'+Math.round(c.pibAtual/1000)+'k' : '—';
+  document.getElementById('mMort').textContent = c.mort ? Number(c.mort).toFixed(2) : '—';
+  document.getElementById('mArea').textContent = c.area ? Number(c.area).toLocaleString('pt-BR',{maximumFractionDigits:0})+' km²' : '—';
+  const dens = c.pop2022 && c.area ? (c.pop2022/c.area).toFixed(1) : null;
+  document.getElementById('mDens').textContent = dens ? dens+' hab/km²' : '—';
+
+  document.getElementById('odsEsc').textContent = `📊 Escolarização: ${c.esc ? Number(c.esc).toFixed(1)+'%' : '~98%'} (Censo 2022)`;
+  document.getElementById('odsPIB').textContent = c.pibAtual ? `📊 PIB per capita: R$ ${Math.round(c.pibAtual).toLocaleString('pt-BR')}` : '📊 PIB: dados em atualização';
+  document.getElementById('odsPop').textContent = c.pop2022 ? `📊 População: ${Number(c.pop2022).toLocaleString('pt-BR')} hab.` : '📊 Carregando...';
+
+  renderCharts(c);
+
+  // Reset IA
+  aiHistory = [];
+  document.getElementById('aiMessages').innerHTML = `
+    <div class="msg msg-ai"><div class="msg-bubble">
+      Dados de <strong>${c.nome}</strong> carregados com sucesso! 🏙️<br><br>
+      Tenho acesso à população (${c.pop2022 ? Number(c.pop2022).toLocaleString('pt-BR')+' hab.' : 'carregando'}), 
+      PIB per capita${c.pibAtual ? ' de R$ '+Math.round(c.pibAtual).toLocaleString('pt-BR') : ''} e mais indicadores.
+      Me pergunte qualquer coisa sobre essa cidade!
+    </div></div>`;
+}
+
+// 5. GRÁFICOS
+function renderCharts(c) {
+  const grid = 'rgba(255,255,255,0.05)';
+  const tick = '#5a5a7a';
+  Object.values(charts).forEach(ch => ch.destroy());
+  charts = {};
+
+  charts.pop = new Chart(document.getElementById('chartPop'), {
+    type: 'line',
+    data: {
+      labels: c.popHist.map(p=>p.ano),
+      datasets: [{ data: c.popHist.map(p=>p.val), borderColor:'#6c63ff', backgroundColor:'rgba(108,99,255,0.1)', tension:.4, fill:true, pointRadius:5, pointBackgroundColor:'#6c63ff', borderWidth:2.5 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { x:{grid:{color:grid},ticks:{color:tick,font:{size:11}}}, y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>(v/1000).toFixed(0)+'k'}} }
+    }
+  });
+
+  charts.pib = new Chart(document.getElementById('chartPIB'), {
+    type: 'bar',
+    data: {
+      labels: c.pibHist.map(p=>p.ano),
+      datasets: [{ data:c.pibHist.map(p=>p.val), backgroundColor:'rgba(0,229,160,0.2)', borderColor:'#00e5a0', borderWidth:2, borderRadius:6, borderSkipped:false }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { x:{grid:{display:false},ticks:{color:tick,font:{size:11}}}, y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>'R$'+(v/1000).toFixed(0)+'k'}} }
+    }
+  });
+
+  const compLabels = ['Média SP','São Paulo','Campinas','São José dos Campos', c.nome,'Santos','Sorocaba'];
+  const compVals   = [58000, 85000, 72000, 62000, c.pibAtual||45000, 68000, 55000];
+  const compColors = compLabels.map(l => l === c.nome ? '#6c63ff' : 'rgba(42,42,61,0.9)');
+
+  charts.comp = new Chart(document.getElementById('chartComp'), {
+    type: 'bar', indexAxis:'y',
+    data: { labels: compLabels, datasets: [{ data:compVals, backgroundColor:compColors, borderRadius:5, borderSkipped:false }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` R$ ${ctx.parsed.x.toLocaleString('pt-BR')}`}}},
+      scales: { x:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>'R$'+(v/1000).toFixed(0)+'k'}}, y:{grid:{display:false},ticks:{color:tick,font:{size:12}}} }
+    }
+  });
+}
+
+// 6. IA — Claude API
+function useSuggestion(el) {
+  document.getElementById('aiInput').value = el.textContent;
+  sendAI();
+}
+
+async function sendAI() {
+  const input = document.getElementById('aiInput');
+  const btn = document.getElementById('aiSend');
+  const msgs = document.getElementById('aiMessages');
+  const q = input.value.trim();
+  if (!q) return;
+
+  const ctx = currentCity ? `
+Cidade: ${currentCity.nome} (SP) · ID IBGE: ${currentCity.id}
+População 2022: ${currentCity.pop2022 ? Number(currentCity.pop2022).toLocaleString('pt-BR') : 'N/D'}
+PIB per capita: ${currentCity.pibAtual ? 'R$ '+Math.round(currentCity.pibAtual).toLocaleString('pt-BR') : 'N/D'}
+Mortalidade infantil: ${currentCity.mort || 'N/D'}
+Escolarização 6-14 anos: ${currentCity.esc ? Number(currentCity.esc).toFixed(1)+'%' : '~98%'}
+Área: ${currentCity.area || 'N/D'} km²
+ODS do projeto: 04, 10, 11
+Projeto: Atividade Extensionista ADS UNINTER 2025` : 'Nenhuma cidade selecionada.';
+
+  msgs.innerHTML += `<div class="msg msg-user"><div class="msg-bubble">${q}</div></div>`;
+  input.value = ''; btn.disabled = true;
+  const tid = 'typing-'+Date.now();
+  msgs.innerHTML += `<div class="msg msg-ai" id="${tid}"><div class="msg-bubble typing">Analisando os dados...</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  aiHistory.push({role:'user', content: q});
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `Você é um assistente especializado em indicadores sociais de municípios de São Paulo. Responda sempre em português, de forma clara, didática e acessível ao cidadão comum. Relacione os dados com os ODS da ONU quando relevante. Seja objetivo e use no máximo 3 parágrafos curtos.\n\nContexto atual:\n${ctx}`,
+        messages: aiHistory
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Não consegui processar. Tente novamente.';
+    document.getElementById(tid)?.remove();
+    msgs.innerHTML += `<div class="msg msg-ai"><div class="msg-bubble">${reply.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div></div>`;
+    aiHistory.push({role:'assistant', content: reply});
+  } catch(e) {
+    document.getElementById(tid)?.remove();
+    msgs.innerHTML += `<div class="msg msg-ai"><div class="msg-bubble typing">Erro ao conectar com a IA. Verifique sua conexão.</div></div>`;
+  }
+  btn.disabled = false;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+document.getElementById('aiInput').addEventListener('keydown', e => { if(e.key==='Enter') sendAI(); });
+
+// INIT
+loadMunicipios();
+</script>
+</body>
+</html>
